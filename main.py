@@ -118,20 +118,22 @@ for x in range(len(maze_solution_states)):
 for _ in range(50):
     maze_solution_states.append(np.copy(maze_solution_states[-1]))
 
-final_maze_states = maze_states + maze_solution_states
+maze_states.extend(maze_solution_states)
 
 # Création du GIF
 
 fig, ax = plt.subplots(figsize=(6, 6))
 ax.axis("off")
 
-def update_final(frame):
+def update(frame):
     ax.clear()
     ax.axis("off")
-    ax.imshow(final_maze_states[frame], cmap=cmap, vmin=0, vmax=3)
+    ax.imshow(maze_states[frame], cmap=cmap, vmin=0, vmax=3)
 
-ani_final = animation.FuncAnimation(fig, update_final, frames=len(final_maze_states), interval=100)
+ani_final = animation.FuncAnimation(fig, update, frames=len(maze_states), interval=100)
 
 # Sauvegarde du GIF
 final_gif_path = f"./maze_{index}.gif"
 ani_final.save(final_gif_path, writer="imagemagick", fps=20)
+
+# Disponible dans mon Github : https://github.com/om4r932/maze-gif-generator
