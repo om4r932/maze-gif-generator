@@ -1,3 +1,4 @@
+from copy import deepcopy
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import random
@@ -12,6 +13,7 @@ maze_states = []
 maze_solution_states = []
 
 cmap = plt.get_cmap("Greys") # Sélection de la colormap (sélectionné : nuances de gris)
+DIRECTIONS = [(-1, 0), (0, -1), (1, 0), (0, 1)] # Directions possibles pour se déplacer (haut, gauche, bas, droite)
 
 index = 0
 while os.path.exists(f"./maze_{index}.gif"):
@@ -42,7 +44,7 @@ def generate_maze(rows, cols):
             max_steps = steps
             farthest_cell = (x, y)
 
-        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        directions = DIRECTIONS.copy()
         random.shuffle(directions)
         for dx, dy in directions:
             nx, ny = x + dx * 2, y + dy * 2
@@ -93,7 +95,7 @@ def solve_maze(maze):
         if maze[x][y] == 2:
             return True
 
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        for dx, dy in DIRECTIONS:
             nx, ny = x + dx, y + dy
             if is_valid(nx, ny):
                 if dfs((nx, ny)):
@@ -109,7 +111,6 @@ solve_maze(maze)
 
 for x in range(len(maze_solution_states)):
     temp = maze_solution_states[x].tolist()
-    # add borders
     for i in range(len(temp)):
         temp[i].insert(0, 1)
     temp.insert(0, [1 for _ in range(len(temp[0]))])
@@ -122,7 +123,7 @@ maze_states.extend(maze_solution_states)
 
 # Création du GIF
 
-fig, ax = plt.subplots(figsize=(6, 6))
+fig, ax = plt.subplots(figsize=(7, 7))
 ax.axis("off")
 
 def update(frame):
