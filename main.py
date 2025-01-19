@@ -1,116 +1,137 @@
-import pygame, sys, os
-from functions import *
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import random
+import numpy as np
+import os
 
-def get_asset_path(relative_path):
-    # Si le script est exécuté sous forme d'exécutable PyInstaller
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
+# Dimensions du labyrinthe
+rows, cols = 20, 20
 
-# Définition des propriétés de la fenêtre
-WIDTH, HEIGHT = 800, 800
-TILE_SIZE = 16
+# Variables pour stocker les étapes intermédiaires
+maze_states = []
+maze_solution_states = []
 
-# Définition des couleurs utilisées
-GREY = (127, 127, 127)
-DARK_RED = (139, 0, 0)
-BLACK = (0, 0, 0)
-GREEN = (0, 255, 0)
+cmap = plt.get_cmap("Greys") # Sélection de la colormap (sélectionné : nuances de gris)
 
-# Initialisation de la fenêtre et de ses paramètres
-pygame.init()
-window = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Labyrinthe - Omar ID EL MOUMEN")
-clock = pygame.time.Clock()
+index = 0
+while os.path.exists(f"./maze_{index}.gif"):
+    index += 1
 
-# Préparation des sprites d'animation du personnage
-sprites = {}
-base = pygame.image.load(get_asset_path('assets/man.png')) # L'image doit contenir 12 sprites 16x16 chacun (dont 4 lignes pour chaque direction et 3 colonnes pour chaque état)
-rectPlayer = pygame.Rect(0, 0, 16, 16)
-w, h = rectPlayer.size
+# Génération du labyrinthe avec capture des étapes (algorithme utilisé : DFS)
+def generate_maze(rows, cols):
+    maze = [[1 for _ in range(cols)] for _ in range(rows)] # 1 = mur, 0 = chemin
+    visited = [[False for _ in range(cols)] for _ in range(rows)] # utilisé pour DFS
+    start_x, start_y = start_pos = (0, 0)
 
-for i, xx in enumerate(["N", "E", "S", "W"]):
-    for pos in range(4):
-        img_name = f"man{xx}{pos}"
-        xpos = pos
-        if pos == 3:
-            xpos = 1
-        merged_surface = pygame.Surface.subsurface(base, xpos * w, i * h, w, h)
-        sprites[img_name] = pygame.transform.scale(merged_surface, (TILE_SIZE, TILE_SIZE)) # Redimensionne les sprites selon la taille des cellules
+    farthest_cell = (start_x, start_y) # Utilisé pour placer automatiquement la sortie
+    max_steps = 0
 
-maze = generate_maze(HEIGHT // TILE_SIZE, WIDTH // TILE_SIZE) # Génère un labyrinthe aléatoire (voir functions.py)
+    def is_valid(x, y): # Evite les débordements
+        return 0 <= x < rows and 0 <= y < cols and not visited[x][y]
 
-player = {
-    "x": 0,
-    "y": 0,
-    'direction': 'S',
-    "state": 0
-} # Données du joueur
+    def dfs(start, steps=0): # DFS
+        nonlocal farthest_cell, max_steps
 
-movement_delay = 125 # Délai, en millisecondes, entre chaque mouvement
-speed = 1 # Vitesse du joueur, par case
-last_move_time = pygame.time.get_ticks()
-gave_up = False
+        x, y = start
+        maze[x][y] = 0
+        visited[x][y] = True
 
-while True:
-    window.fill(GREY)
+        maze_states.append(np.copy(maze)) # Capture une image permettant à la création du GIF
 
-    for event in pygame.event.get(): # Vérifie les événements nécessaires
-        if event.type == pygame.QUIT: # Lorsque l'utilisateur ferme la fenêtre
-            pygame.quit()
-            sys.exit()
-        
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE: # Si le joueur souhaite abandonner, appuyer Espace affiche la solution pendant 10 secondes, puis quitte la partie
-            solution = solve_maze(maze)
-            for y, x in solution:
-                maze[y][x] = (3, solution.index((y, x)) * 255 / len(solution))
-            print("Abandon :'(")
-            pygame.time.set_timer(pygame.QUIT, 10000)
+        if steps > max_steps:
+            max_steps = steps
+            farthest_cell = (x, y)
 
-    keys = pygame.key.get_pressed()
-    current_time = pygame.time.get_ticks()
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        random.shuffle(directions)
+        for dx, dy in directions:
+            nx, ny = x + dx * 2, y + dy * 2
+            if is_valid(nx, ny):
+                maze[x + dx][y + dy] = 0
+                dfs((nx, ny), steps + 1)
 
-    if current_time - last_move_time >= movement_delay: # Gestion des mouvements du joueur
-        if keys[pygame.K_UP]:
-            if maze[player['y']-1][player['x']] != 1:
-                player['y'] -= speed
-                player['state'] = (player['state'] + 1) % 4
-                player['direction'] = 'N'
-                last_move_time = current_time
-        if keys[pygame.K_DOWN]:
-            if maze[player['y']+1][player['x']] != 1:
-                player['y'] += speed
-                player['state'] = (player['state'] + 1) % 4
-                player['direction'] = 'S'
-                last_move_time = current_time
-        if keys[pygame.K_LEFT]:
-            if maze[player['y']][player['x']-1] != 1:
-                player['x'] -= speed
-                player['state'] = (player['state'] + 1) % 4
-                player['direction'] = 'W'
-                last_move_time = current_time
-        if keys[pygame.K_RIGHT]:
-            if maze[player['y']][player['x']+1] != 1:
-                player['x'] += speed
-                player['state'] = (player['state'] + 1) % 4
-                player['direction'] = 'E'
-                last_move_time = current_time
+    dfs(start_pos)
+    goal_x, goal_y = farthest_cell
+    maze[goal_x][goal_y] = 2 # 2 = sortie
 
-    if maze[player['y']][player['x']] == 2: # Si le joueur atteint l'objectif, il gagne
-        print("Gagné !")
-        pygame.quit()
-        sys.exit()
+    return maze
 
-    for y in range(len(maze)): # Affichage des objets dans la fenêtre
-        for x in range(len(maze[y])):
-            if maze[y][x] == 1:
-                pygame.draw.rect(window, BLACK, (x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE))
-            if isinstance(maze[y][x], tuple) and maze[y][x][0] == 3:
-                pygame.draw.rect(window, (maze[y][x][1], 255, 255), (x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE))
-            if maze[y][x] == 2 and not gave_up:
-                pygame.draw.rect(window, GREEN, (x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE))
-            if maze[y][x] == 5 and not gave_up:
-                window.blit(sprites[f"man{player['direction']}{player['state']}"], (player['x']*TILE_SIZE, player['y']*TILE_SIZE))
+# Génération du labyrinthe avec capture des étapes
+maze = generate_maze(rows, cols)
 
-    pygame.display.flip()
-    clock.tick(30) # Limite le nombre d'images par seconde à 30
+for x in range(len(maze_states)): # Permet de rajouter les bordures manquants
+    temp = maze_states[x].tolist()
+    for i in range(len(temp)):
+        temp[i].insert(0, 1)
+    temp.insert(0, [1 for _ in range(len(temp[0]))])
+    maze_states[x] = np.copy(temp)
+
+for _ in range(50): # Prolonge la fin du GIF permettant de voir le labyrinthe final
+    maze_states.append(np.copy(maze_states[-1]))
+
+# Solution du labyrinthe avec capture des étapes (algorithme utilisé : DFS)
+def solve_maze(maze):
+    rows, cols = len(maze), len(maze[0])
+    visited = [[False for _ in range(cols)] for _ in range(rows)]
+    start_pos = (0, 0)
+    path = []
+
+    def is_valid(x, y):
+        return 0 <= x < rows and 0 <= y < cols and not visited[x][y] and maze[x][y] != 1
+
+    def dfs(start):
+        x, y = start
+        visited[x][y] = True
+        path.append((x, y))
+
+        # Capture l'état actuel du labyrinthe
+        current_state = np.copy(maze)
+        for px, py in path:
+            current_state[px][py] = 3  # Marque le chemin actuel
+        maze_solution_states.append(np.copy(current_state))
+
+        if maze[x][y] == 2:
+            return True
+
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nx, ny = x + dx, y + dy
+            if is_valid(nx, ny):
+                if dfs((nx, ny)):
+                    return True
+
+        path.pop()
+        return False
+
+    dfs(start_pos)
+    return path
+
+solve_maze(maze)
+
+for x in range(len(maze_solution_states)):
+    temp = maze_solution_states[x].tolist()
+    # add borders
+    for i in range(len(temp)):
+        temp[i].insert(0, 1)
+    temp.insert(0, [1 for _ in range(len(temp[0]))])
+    maze_solution_states[x] = np.copy(temp)
+
+for _ in range(50):
+    maze_solution_states.append(np.copy(maze_solution_states[-1]))
+
+final_maze_states = maze_states + maze_solution_states
+
+# Création du GIF
+
+fig, ax = plt.subplots(figsize=(6, 6))
+ax.axis("off")
+
+def update_final(frame):
+    ax.clear()
+    ax.axis("off")
+    ax.imshow(final_maze_states[frame], cmap=cmap, vmin=0, vmax=3)
+
+ani_final = animation.FuncAnimation(fig, update_final, frames=len(final_maze_states), interval=100)
+
+# Sauvegarde du GIF
+final_gif_path = f"./maze_{index}.gif"
+ani_final.save(final_gif_path, writer="imagemagick", fps=20)
